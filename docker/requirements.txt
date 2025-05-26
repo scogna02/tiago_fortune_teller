@@ -1,0 +1,7 @@
+face_recognition
+pykeen
+openai
+numpy
+opencv-python
+PyYAML
+more_itertools>=8.0.0

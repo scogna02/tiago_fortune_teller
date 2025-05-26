@@ -1,0 +1,18 @@
+version: "3"
+services:
+  tiago_fortune_teller:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ../src:/app/src
+      - ../data:/app/data
+      - ../config:/app/config
+    environment:
+      - PYTHONPATH=/app/src
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ROS_MASTER_URI=${ROS_MASTER_URI}
+
+    network_mode: "host"
+    privileged: true  # Required if interacting with hardware
+    command: ["python3", "src/main.py"]
