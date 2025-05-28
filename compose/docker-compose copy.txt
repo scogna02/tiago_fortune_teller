@@ -12,8 +12,8 @@ services:
       - ROS_MASTER_URI=http://localhost:11311
       - ROS_HOSTNAME=localhost
       - PYTHONPATH=/app/src
+
+
     network_mode: "host"
-    privileged: true
-    stdin_open: true
-    tty: true
-    
+    privileged: true  # Required if interacting with hardware
+    command: ["python3", "src/main.py"]
