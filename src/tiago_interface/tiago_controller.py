@@ -5,10 +5,12 @@ from std_msgs.msg import String
 from std_srvs.srv import Empty, EmptyResponse
 import threading
 import time
+import cv2
+from datetime import datetime
 
 class TiagoController:
     def __init__(self):
-        """Initialize the Tiago controller with ROS publishers and interactive input capability."""
+        """Initialize the Tiago controller with ROS publishers and PC camera integration."""
         rospy.init_node('tiago_fortune_teller', anonymous=True)
         
         # Publishers for robot actions
@@ -25,6 +27,9 @@ class TiagoController:
         
         # Service for signaling input is needed
         self.input_service = rospy.Service('/tiago/request_input', Empty, self.request_input_callback)
+        
+        # Initialize camera manager (lazy loading for PC camera)
+        self.camera_manager = None
         
         rospy.loginfo("Tiago Controller initialized")
         time.sleep(1)  # Give time for connections to establish
@@ -95,13 +100,82 @@ class TiagoController:
                 self.waiting_for_input = False
                 return None
 
-    def capture_image(self):
-        """Capture an image (placeholder implementation)."""
+    def initialize_camera(self):
+        """Initialize the PC camera manager for image capture."""
+        try:
+            from tiago_interface.pc_camera_manager import TiagoCameraManager  # Import the PC version
+            self.camera_manager = TiagoCameraManager()
+            rospy.loginfo("📷 PC Camera manager initialized")
+        except Exception as e:
+            rospy.logerr(f"Failed to initialize PC camera manager: {e}")
+            self.camera_manager = None
+
+    def capture_image(self, save=True, for_face_recognition=True):
+        """
+        Capture an image using PC camera.
+        
+        Args:
+            save (bool): Whether to save the captured image
+            for_face_recognition (bool): Whether to format for face recognition
+            
+        Returns:
+            numpy.ndarray: Captured image
+        """
+        # Initialize camera manager if needed
+        if self.camera_manager is None:
+            self.initialize_camera()
+        
+        rospy.loginfo("📸 Capturing image using PC camera...")
+        
+        if self.camera_manager and self.camera_manager.is_camera_ready():
+            if for_face_recognition:
+                image = self.camera_manager.capture_for_face_recognition()
+            else:
+                image = self.camera_manager.capture_image(save=save)
+        else:
+            rospy.logwarn("⚠️  PC Camera not ready, using fallback image")
+            image = self._create_fallback_image()
+        
+        if image is not None:
+            rospy.loginfo(f"✅ Image captured successfully: {image.shape}")
+        else:
+            rospy.logwarn("⚠️  Using fallback image generation")
+            image = self._create_fallback_image()
+            
+        return image
+    
+    def _create_fallback_image(self):
+        """Create a fallback image when camera is not available."""
         import numpy as np
-        rospy.loginfo("Capturing image...")
-        return np.zeros((480, 640, 3), dtype=np.uint8)
+        
+        fallback = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.rectangle(fallback, (50, 50), (590, 430), (100, 100, 100), 2)
+        cv2.putText(fallback, "SIMULATED CAMERA", (180, 200), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(fallback, "Fortune Teller Mode", (190, 250), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 1)
+        cv2.putText(fallback, f"Time: {datetime.now().strftime('%H:%M:%S')}", 
+                   (220, 300), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
+        
+        return fallback
+    
+    def look_at_user(self):
+        """Move Tiago's head to look at the user (simulated for PC camera)."""
+        rospy.loginfo("👁️  Positioning to look at user (PC camera mode)")
+        self.gesture("look_at_user")
+        time.sleep(2)  # Give time for head movement
+    
+    def prepare_for_photo(self):
+        """Prepare for taking a photo with PC camera."""
+        self.say("Let me position myself to get a good look at you...")
+        self.look_at_user()
+        time.sleep(1)
+        self.say("Perfect! Look into your camera and hold still for just a moment...")
+        time.sleep(0.5)
 
     def shutdown(self):
         """Clean shutdown of the controller."""
         rospy.loginfo("Shutting down Tiago Controller")
+        if self.camera_manager:
+            self.camera_manager.shutdown()
         rospy.signal_shutdown("Tiago Controller shutdown")

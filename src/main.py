@@ -2,7 +2,12 @@
 
 import rospy
 import time
-from face_recognition.face_recognizer import FaceRecognizer
+import os
+
+FACE_RECOGNITION_METHOD = os.getenv('FACE_RECOGNITION_METHOD', 'opencv')  # 'opencv', 'simple', or 'none'
+from face_recognition.face_recognizer import OpenCVFaceRecognizer as FaceRecognizer
+print("✅ Using OpenCV Face Recognition")
+
 from knowledge_graph.graph_manager import GraphManager
 from dialog.fortune_teller import FortuneTeller
 from tiago_interface.tiago_controller import TiagoController
@@ -10,7 +15,11 @@ from tiago_interface.tiago_controller import TiagoController
 class TiagoFortuneInteraction:
     def __init__(self):
         """Initialize the Tiago Fortune Teller interaction system."""
-        self.face_rec = FaceRecognizer()
+        if FaceRecognizer:
+            self.face_rec = FaceRecognizer()
+        else:
+            self.face_rec = None
+            
         self.graph = GraphManager()
         self.fortune = FortuneTeller()
         self.tiago = TiagoController()
@@ -25,19 +34,79 @@ class TiagoFortuneInteraction:
         time.sleep(1)
         self.tiago.say("But before I can peer into your future, I must first understand who you are in the present.")
         
-    def collect_user_info(self):
+    def capture_and_recognize_user(self):
+        """Capture user image and perform face recognition if available."""
+        self.tiago.say("Before we begin, let me take a moment to see who I'm speaking with...")
+        self.tiago.prepare_for_photo()
+        
+        # Capture image
+        image = self.tiago.capture_image(save=True, for_face_recognition=True)
+        
+        if image is not None and self.face_rec:
+            if FACE_RECOGNITION_METHOD == 'opencv':
+                self.tiago.say("Excellent! Now let me see if we've met before...")
+            elif FACE_RECOGNITION_METHOD == 'simple':
+                self.tiago.say("Perfect! I can sense your presence in the cosmic realm...")
+            
+            # Attempt recognition
+            recognition_results = self.face_rec.recognize_face(image)
+            
+            if recognition_results:
+                result = recognition_results[0]
+                if result['is_known'] and FACE_RECOGNITION_METHOD == 'opencv':
+                    person_id = result['person_id']
+                    person_info = self.face_rec.get_person_info(person_id)
+                    visits = person_info.get('recognition_count', 0) if person_info else 0
+                    
+                    self.tiago.gesture("recognition")
+                    self.tiago.say(f"Ah! I remember you! Welcome back, my friend.")
+                    self.tiago.say(f"This is visit number {visits} for you in my mystical realm.")
+                    
+                    return person_id, True
+                else:
+                    self.tiago.gesture("curious")
+                    if FACE_RECOGNITION_METHOD == 'opencv':
+                        self.tiago.say("I see a new face before me! A fresh soul seeking cosmic wisdom.")
+                    else:
+                        self.tiago.say("I sense a presence seeking wisdom from the cosmic forces.")
+                    return None, False
+            else:
+                self.tiago.say("The cosmic energies make it difficult to see clearly, but no matter!")
+                return None, False
+        else:
+            if not self.face_rec:
+                self.tiago.say("I capture your essence in the cosmic realm, ready to divine your future!")
+            else:
+                self.tiago.say("The mystical visions are clouded, but we shall proceed nonetheless!")
+            return None, False
+
+    def collect_user_info(self, known_person_id=None):
         """Collect personal information from the user through interactive questions."""
         user_info = {}
         
-        # Ask for name
-        self.tiago.gesture("thoughtful_pose")
-        name = self.tiago.ask_question("Tell me, what name do you go by in this earthly realm?")
-        if name:
-            user_info['name'] = name
-            self.tiago.say(f"Ah, {name}... I can feel the cosmic energy surrounding that name.")
-        else:
-            self.tiago.say("The spirits whisper that you prefer to remain nameless. Very mysterious...")
-            user_info['name'] = "Mysterious Stranger"
+        # If we have a known person, get their stored info (only for OpenCV method)
+        if known_person_id and self.face_rec and FACE_RECOGNITION_METHOD == 'opencv':
+            stored_info = self.face_rec.get_person_info(known_person_id)
+            if stored_info and 'name' in stored_info:
+                user_info['name'] = stored_info['name']
+                self.tiago.say(f"I remember your name is {stored_info['name']}. Is that still correct?")
+                confirmation = self.tiago.ask_question("Please confirm with 'yes' or 'no'")
+                
+                if confirmation and confirmation.lower() not in ['no', 'n']:
+                    self.tiago.say("Wonderful! The cosmic records are accurate.")
+                else:
+                    user_info['name'] = None
+        
+        # Ask for name if we don't have it
+        if 'name' not in user_info or not user_info['name']:
+            self.tiago.gesture("thoughtful_pose")
+            name = self.tiago.ask_question("Tell me, what name do you go by in this earthly realm?")
+            if name:
+                user_info['name'] = name
+                self.tiago.say(f"Ah, {name}... I can feel the cosmic energy surrounding that name.")
+            else:
+                self.tiago.say("The spirits whisper that you prefer to remain nameless. Very mysterious...")
+                user_info['name'] = "Mysterious Stranger"
         
         time.sleep(1)
         
@@ -79,9 +148,20 @@ class TiagoFortuneInteraction:
         
         return user_info
     
-    def process_user_data(self, user_info):
-        """Process and store user information in the knowledge graph."""
-        person_id = user_info.get('name', 'unknown_user').lower().replace(' ', '_')
+    def process_user_data(self, user_info, image=None, known_person_id=None):
+        """Process and store user information."""
+        person_id = known_person_id or user_info.get('name', 'unknown_user').lower().replace(' ', '_')
+        
+        # Store face/person data if we have face recognition
+        if image is not None and self.face_rec and not known_person_id:
+            success = self.face_rec.add_face(image, person_id, user_info.get('name'))
+            if success:
+                if FACE_RECOGNITION_METHOD == 'opencv':
+                    self.tiago.say("Your visage has been recorded in the cosmic archives.")
+                else:
+                    self.tiago.say("Your presence has been noted by the cosmic forces.")
+            else:
+                self.tiago.say("The cosmic forces make recording difficult, but your essence is still captured.")
         
         # Update knowledge graph with user information
         self.graph.update(person_id, "visited_fortune_teller")
@@ -129,6 +209,8 @@ def main():
         print("="*60)
         print("🔮 TIAGO FORTUNE TELLER - INTERACTIVE EXPERIENCE 🔮")
         print("="*60)
+        print(f"Face Recognition Mode: {FACE_RECOGNITION_METHOD.upper()}")
+        print("="*60)
         print("\nStarting the interactive fortune telling session...")
         print("Make sure to run the user_input_node.py in another terminal!")
         print("Run: python3 src/user_input_node.py")
@@ -142,10 +224,16 @@ def main():
         interaction.greet_and_introduce()
         time.sleep(2)
         
-        user_info = interaction.collect_user_info()
+        # Capture image and recognize user (if face recognition enabled)
+        known_person_id, is_returning_user = interaction.capture_and_recognize_user()
+        
+        # Collect user information
+        user_info = interaction.collect_user_info(known_person_id)
         print(f"\n📊 Collected user info: {user_info}")
         
-        person_id = interaction.process_user_data(user_info)
+        # Process and store user data
+        captured_image = interaction.tiago.capture_image(save=False, for_face_recognition=True)
+        person_id = interaction.process_user_data(user_info, captured_image, known_person_id)
         print(f"📋 Person ID: {person_id}")
         
         interaction.generate_personalized_fortune(person_id, user_info)
@@ -167,9 +255,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
 
 """#!/usr/bin/env python3
 

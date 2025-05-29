@@ -90,7 +90,7 @@ class GraphManager:
             self.user_data[person_id] = {
                 'first_seen': timestamp,
                 'last_seen': timestamp,
-                'visit_count': 0,
+                'visit_count': 1,
                 'attributes': {}
             }
         
