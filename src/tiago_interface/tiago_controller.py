@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 import rospy
+import actionlib
 from std_msgs.msg import String
 from std_srvs.srv import Empty, EmptyResponse
+from pal_interaction_msgs.msg import TtsAction, TtsGoal
+from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
 import threading
 import time
 import cv2
@@ -10,10 +13,13 @@ from datetime import datetime
 
 class TiagoController:
     def __init__(self):
-        """Initialize the Tiago controller with ROS publishers and PC camera integration."""
+        """Initialize the Tiago controller with both ROS action servers and interactive input."""
         rospy.init_node('tiago_fortune_teller', anonymous=True)
         
-        # Publishers for robot actions
+        # Action clients for real Tiago functionality
+        self.setup_action_clients()
+        
+        # Publishers for custom topics (backup/logging)
         self.speech_pub = rospy.Publisher('/tiago/speech', String, queue_size=10)
         self.gesture_pub = rospy.Publisher('/tiago/gesture', String, queue_size=10)
         
@@ -34,6 +40,30 @@ class TiagoController:
         rospy.loginfo("Tiago Controller initialized")
         time.sleep(1)  # Give time for connections to establish
 
+    def setup_action_clients(self, timeout=10):
+        """Setup action clients for TTS and gestures."""
+        # TTS client
+        self.tts_client = actionlib.SimpleActionClient('/tts_to_soundplay', TtsAction)
+        rospy.loginfo("Waiting for /tts_to_soundplay action server...")
+        
+        if self.tts_client.wait_for_server(rospy.Duration(timeout)):
+            self.tts_available = True
+            rospy.loginfo("✅ TTS action server connected")
+        else:
+            rospy.logwarn("⚠️ TTS action server not available, using fallback")
+            self.tts_available = False
+        
+        # Gesture client
+        self.gesture_client = actionlib.SimpleActionClient('/play_motion', PlayMotionAction)
+        rospy.loginfo("Waiting for /play_motion action server...")
+        
+        if self.gesture_client.wait_for_server(rospy.Duration(timeout)):
+            self.gesture_available = True
+            rospy.loginfo("✅ PlayMotion action server connected")
+        else:
+            rospy.logwarn("⚠️ PlayMotion action server not available, gestures will be simulated")
+            self.gesture_available = False
+
     def input_callback(self, msg):
         """Callback for receiving user input from terminal."""
         with self.input_lock:
@@ -46,42 +76,97 @@ class TiagoController:
         """Service callback to signal that input is needed."""
         return EmptyResponse()
 
-    def say(self, text):
-        """Make Tiago speak the given text."""
+    def say(self, text, language='en_GB'):
+        """Make Tiago speak using TTS action server or fallback."""
         rospy.loginfo(f"Tiago says: {text}")
         print(f"🤖 Tiago: {text}")
+        text = str(text).strip()
         
-        # Publish to ROS topic (for real robot integration)
+        # Try using real TTS action server first
+        if self.tts_available:
+            try:
+                goal = TtsGoal()
+                goal.rawtext.text = text
+                goal.rawtext.lang_id = language
+
+                self.tts_client.send_goal(goal)
+               
+                # Wait for result with timeout
+                result = self.tts_client.wait_for_result(rospy.Duration(10))
+                if not result:  
+                    rospy.logwarn("⚠️ TTS timeout")
+                    
+            except Exception as e:
+                rospy.logerr(f"❌ TTS error: {e}")
+        
+        # Publish to custom topic (for logging/monitoring)
         msg = String()
         msg.data = text
         self.speech_pub.publish(msg)
         
-        # Simulate speech timing
-        time.sleep(len(text) * 0.05 + 1)
+        # Simulate speech timing if no real TTS
+        if not self.tts_available:
+            time.sleep(0.1)
 
     def gesture(self, gesture_type):
-        """Make Tiago perform a gesture."""
+        """Make Tiago perform a gesture using PlayMotion action server."""
         rospy.loginfo(f"Tiago performs gesture: {gesture_type}")
         print(f"🤖 *Tiago {gesture_type}*")
         
-        # Publish to ROS topic (for real robot integration)
+        # Map custom gesture names to actual Tiago motion names
+        # Based on official TIAGo motions available in Gazebo simulation
+        motion_mapping = {
+            'wave': 'wave',
+            'mystical_pose': 'home',  
+            'thoughtful_pose': 'home',  # No specific look_down motion available
+            'crystal_ball_gaze': 'inspect_surroundings',  # Good for mystical gazing
+            'meditation': 'home',
+            'mystical_wave': 'wave',
+            'revelation': 'offer',  # Offering gesture for revelation
+            'bow': 'home',  # No bow motion available, use home
+            'recognition': 'point',
+            'curious': 'head_tour',  # Head movement for curiosity
+            'counting': 'point',
+            'look_at_user': 'head_tour',  # Use head_tour for looking
+            'nod': 'home',  # No nod available, use home
+            # Additional gestures that could be useful
+            'open_arms': 'offer',
+            'shake_hands': 'shake_hands',
+            'thumb_up': 'thumb_up_hand',
+            'unfold_arm': 'unfold_arm'
+        }
+        
+        motion_name = motion_mapping.get(gesture_type, 'home')
+        
+        # Try using real PlayMotion action server
+        if self.gesture_available:
+            try:
+                goal = PlayMotionGoal()
+                goal.motion_name = motion_name
+                goal.skip_planning = False
+                goal.priority = 0
+                
+                self.gesture_client.send_goal(goal)
+                result = self.gesture_client.wait_for_result(rospy.Duration(15))
+                
+                if result:
+                    rospy.loginfo(f"✅ Gesture '{motion_name}' completed successfully")
+                else:
+                    rospy.logwarn(f"⚠️ Gesture '{motion_name}' timeout")
+                    
+            except Exception as e:
+                rospy.logerr(f"❌ Gesture error: {e}")
+        else:
+            # Simulate gesture timing
+            time.sleep(2)
+        
+        # Publish to custom topic (for logging/monitoring)
         msg = String()
         msg.data = gesture_type
         self.gesture_pub.publish(msg)
-        
-        time.sleep(2)  # Gesture duration
 
     def ask_question(self, question, timeout=30):
-        """
-        Ask the user a question and wait for input via ROS topic.
-        
-        Args:
-            question (str): The question to ask
-            timeout (int): Maximum time to wait for response in seconds
-            
-        Returns:
-            str: User's response or None if timeout
-        """
+        """Ask the user a question and wait for input via ROS topic."""
         self.say(question)
         
         with self.input_lock:
@@ -103,7 +188,7 @@ class TiagoController:
     def initialize_camera(self):
         """Initialize the PC camera manager for image capture."""
         try:
-            from tiago_interface.pc_camera_manager import TiagoCameraManager  # Import the PC version
+            from tiago_interface.pc_camera_manager import TiagoCameraManager
             self.camera_manager = TiagoCameraManager()
             rospy.loginfo("📷 PC Camera manager initialized")
         except Exception as e:
@@ -111,17 +196,7 @@ class TiagoController:
             self.camera_manager = None
 
     def capture_image(self, save=True, for_face_recognition=True):
-        """
-        Capture an image using PC camera.
-        
-        Args:
-            save (bool): Whether to save the captured image
-            for_face_recognition (bool): Whether to format for face recognition
-            
-        Returns:
-            numpy.ndarray: Captured image
-        """
-        # Initialize camera manager if needed
+        """Capture an image using PC camera."""
         if self.camera_manager is None:
             self.initialize_camera()
         
@@ -133,13 +208,13 @@ class TiagoController:
             else:
                 image = self.camera_manager.capture_image(save=save)
         else:
-            rospy.logwarn("⚠️  PC Camera not ready, using fallback image")
+            rospy.logwarn("⚠️ PC Camera not ready, using fallback image")
             image = self._create_fallback_image()
         
         if image is not None:
             rospy.loginfo(f"✅ Image captured successfully: {image.shape}")
         else:
-            rospy.logwarn("⚠️  Using fallback image generation")
+            rospy.logwarn("⚠️ Using fallback image generation")
             image = self._create_fallback_image()
             
         return image
@@ -160,18 +235,74 @@ class TiagoController:
         return fallback
     
     def look_at_user(self):
-        """Move Tiago's head to look at the user (simulated for PC camera)."""
-        rospy.loginfo("👁️  Positioning to look at user (PC camera mode)")
+        """Move Tiago's head to look at the user."""
+        rospy.loginfo("👁️ Positioning to look at user")
         self.gesture("look_at_user")
-        time.sleep(2)  # Give time for head movement
+        time.sleep(2)
     
     def prepare_for_photo(self):
-        """Prepare for taking a photo with PC camera."""
+        """Prepare for taking a photo."""
         self.say("Let me position myself to get a good look at you...")
         self.look_at_user()
         time.sleep(1)
         self.say("Perfect! Look into your camera and hold still for just a moment...")
         time.sleep(0.5)
+
+    def check_available_motions(self):
+        """Check what motions are actually available in the current Tiago simulation."""
+        try:
+            import rospy
+            # Get all motion names from parameter server
+            motion_names = []
+            
+            # Try to get motion parameters
+            param_names = rospy.get_param_names()
+            for param in param_names:
+                if '/play_motion/motions/' in param and '/meta/name' in param:
+                    motion_name = param.split('/')[3]  # Extract motion name
+                    if motion_name not in motion_names:
+                        motion_names.append(motion_name)
+            
+            rospy.loginfo(f"📋 Available motions ({len(motion_names)}):")
+            for motion in sorted(motion_names):
+                rospy.loginfo(f"  ✅ {motion}")
+                
+            return motion_names
+            
+        except Exception as e:
+            rospy.logwarn(f"Could not check available motions: {e}")
+            return []
+
+    def check_available_services(self):
+        """Debug method to check what action servers are available."""
+        rospy.loginfo("=== Checking Available Action Servers ===")
+        
+        # Check TTS
+        if self.tts_available:
+            rospy.loginfo("✅ TTS (/tts) - Available")
+        else:
+            rospy.loginfo("❌ TTS (/tts) - Not Available")
+            
+        # Check PlayMotion
+        if self.gesture_available:
+            rospy.loginfo("✅ PlayMotion (/play_motion) - Available")
+            # Also check available motions
+            self.check_available_motions()
+        else:
+            rospy.loginfo("❌ PlayMotion (/play_motion) - Not Available")
+        
+        # List all available action servers
+        rospy.loginfo("Available Action Servers:")
+        topics = rospy.get_published_topics()
+        action_servers = set()
+        
+        for topic, msg_type in topics:
+            if topic.endswith('/goal'):
+                server_name = topic[:-5]  # Remove '/goal'
+                action_servers.add(server_name)
+        
+        for server in sorted(action_servers):
+            rospy.loginfo(f"  {server}")
 
     def shutdown(self):
         """Clean shutdown of the controller."""

@@ -8,7 +8,8 @@ FACE_RECOGNITION_METHOD = os.getenv('FACE_RECOGNITION_METHOD', 'opencv')  # 'ope
 from face_recognition.face_recognizer import OpenCVFaceRecognizer as FaceRecognizer
 print("✅ Using OpenCV Face Recognition")
 
-from knowledge_graph.graph_manager import GraphManager
+#from knowledge_graph.graph_manager import GraphManager
+from knowledge_graph.graph_manager import PyKEENGraphManager
 from dialog.fortune_teller import FortuneTeller
 from tiago_interface.tiago_controller import TiagoController
 
@@ -20,7 +21,9 @@ class TiagoFortuneInteraction:
         else:
             self.face_rec = None
             
-        self.graph = GraphManager()
+        #self.graph = GraphManager()
+        # Use PyKEEN-enhanced graph manager
+        self.graph = PyKEENGraphManager()
         self.fortune = FortuneTeller()
         self.tiago = TiagoController()
         
@@ -163,16 +166,21 @@ class TiagoFortuneInteraction:
             else:
                 self.tiago.say("The cosmic forces make recording difficult, but your essence is still captured.")
         
-        # Update knowledge graph with user information
+        """# Update knowledge graph with user information
         self.graph.update(person_id, "visited_fortune_teller")
         self.graph.update(person_id, f"name:{user_info.get('name', 'unknown')}")
         self.graph.update(person_id, f"age:{user_info.get('age', 'unknown')}")
-        self.graph.update(person_id, f"profession:{user_info.get('profession', 'unknown')}")
+        self.graph.update(person_id, f"profession:{user_info.get('profession', 'unknown')}")"""
+        # Enhanced knowledge graph updates
+        self.graph.update_user_data(person_id, "visited_fortune_teller")
+        self.graph.update_user_data(person_id, f"name:{user_info.get('name', 'unknown')}")
+        self.graph.update_user_data(person_id, f"age:{user_info.get('age', 'unknown')}")
+        self.graph.update_user_data(person_id, f"profession:{user_info.get('profession', 'unknown')}")
         
         return person_id
     
-    def generate_personalized_fortune(self, person_id, user_info):
-        """Generate a personalized fortune based on user information."""
+    """def generate_personalized_fortune(self, person_id, user_info):
+       
         self.tiago.gesture("meditation")
         self.tiago.say("Now, let me consult the cosmic forces...")
         time.sleep(2)
@@ -189,6 +197,27 @@ class TiagoFortuneInteraction:
         
         self.tiago.gesture("revelation")
         self.tiago.say("Behold! Your fortune has been revealed!")
+        time.sleep(1)
+        
+        self.tiago.say(fortune)"""
+
+    def generate_personalized_fortune(self, person_id, user_info):
+        """Generate fortune using PyKEEN embeddings and predictions."""
+        self.tiago.gesture("meditation")
+        self.tiago.say("Now, let me consult the cosmic forces and the knowledge of the ages...")
+        time.sleep(2)
+        
+        # Get rich context from PyKEEN
+        user_context = self.graph.get_user_context(person_id)
+        
+        # Get predicted relations for additional context
+        predictions = self.graph.predict_relations(person_id, top_k=3)
+        
+        # Enhanced fortune generation with PyKEEN context
+        fortune = self.fortune.generate_with_context(person_id, user_info, user_context, predictions)
+        
+        self.tiago.gesture("revelation")
+        self.tiago.say("The knowledge graph reveals profound insights!")
         time.sleep(1)
         
         self.tiago.say(fortune)
