@@ -32,7 +32,7 @@ class TiagoFortuneInteraction:
         self.tiago.gesture("wave")
         self.tiago.say("Greetings, traveler! Welcome to the mystical realm of Tiago the Fortune Teller!")
         time.sleep(1)
-        self.tiago.gesture("mystical_pose")
+        self.tiago.gesture("shake_hands")
         self.tiago.say("I am Tiago, a robotic oracle with the power to glimpse into the threads of destiny.")
         time.sleep(1)
         self.tiago.say("But before I can peer into your future, I must first understand who you are in the present.")
@@ -67,7 +67,7 @@ class TiagoFortuneInteraction:
                     
                     return person_id, True
                 else:
-                    self.tiago.gesture("curious")
+                    self.tiago.gesture("open_arms")
                     if FACE_RECOGNITION_METHOD == 'opencv':
                         self.tiago.say("I see a new face before me! A fresh soul seeking cosmic wisdom.")
                     else:
@@ -138,7 +138,7 @@ class TiagoFortuneInteraction:
         time.sleep(1)
         
         # Ask for profession
-        self.tiago.gesture("crystal_ball_gaze")
+        self.tiago.gesture("thumbs_up")
         profession = self.tiago.ask_question("And what calling occupies your days? What is your profession or work?")
         if profession:
             user_info['profession'] = profession
@@ -203,7 +203,7 @@ class TiagoFortuneInteraction:
 
     def generate_personalized_fortune(self, person_id, user_info):
         """Generate fortune using PyKEEN embeddings and predictions."""
-        self.tiago.gesture("meditation")
+        self.tiago.gesture("prepare_magic")
         self.tiago.say("Now, let me consult the cosmic forces and the knowledge of the ages...")
         time.sleep(2)
         
@@ -261,7 +261,7 @@ def main():
         print(f"\n📊 Collected user info: {user_info}")
         
         # Process and store user data
-        captured_image = interaction.tiago.capture_image(save=False, for_face_recognition=True)
+        captured_image = interaction.tiago.capture_image(save=True, for_face_recognition=True)
         person_id = interaction.process_user_data(user_info, captured_image, known_person_id)
         print(f"📋 Person ID: {person_id}")
         
@@ -284,73 +284,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-"""#!/usr/bin/env python3
-
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from tiago_interface.tiago_controller import TiagoController
-from face_recognition.face_recognizer import FaceRecognizer
-from knowledge_graph.graph_manager import GraphManager
-from dialog.fortune_teller import FortuneTeller
-import rospy
-
-def main():
-    try:
-        rospy.loginfo("Starting Tiago Fortune Teller...")
-        
-        # Initialize controller
-        tiago = TiagoController()
-        
-        # Check what services are actually available
-        tiago.check_available_services()
-        
-        # Initialize other components
-        face_rec = FaceRecognizer()
-        graph = GraphManager()
-        fortune = FortuneTeller()
-
-        # Test TTS first
-        rospy.loginfo("Testing TTS...")
-        tiago.say("Welcome to the Tiago fortune teller!")
-        
-        # Test gesture
-        rospy.loginfo("Testing gesture...")
-        tiago.gesture("wave")
-        
-        # Continue with fortune telling logic
-        rospy.loginfo("Running fortune telling sequence...")
-        
-        # Simulate face recognition
-        image = None  # No camera in simulation
-        person_id, is_new = face_rec.recognize_or_add(image)
-        
-        if is_new:
-            tiago.say("A new soul has arrived!")
-        else:
-            tiago.say(f"Welcome back, {person_id}!")
-        
-        # Update knowledge graph
-        graph.update(person_id, "visited_fortune_teller")
-        embedding = graph.get_embedding(person_id)
-        
-        # Generate and deliver fortune
-        fortune_text = fortune.generate(person_id, embedding)
-        tiago.say(fortune_text)
-        
-        # Final gesture
-        tiago.gesture("nod")
-        
-        rospy.loginfo("Fortune telling complete!")
-        
-    except KeyboardInterrupt:
-        rospy.loginfo("Fortune teller interrupted by user")
-    except Exception as e:
-        rospy.logerr(f"Error in main: {e}")
-        import traceback
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    main()"""

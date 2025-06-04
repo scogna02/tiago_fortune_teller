@@ -42,9 +42,9 @@ def test_individual_gestures():
             'revelation',
             'bow',
             'recognition',
-            'curious',
             'counting',
-            'look_at_user'
+            'shake_hands',
+            'thumbs_up'
         ]
         
         print(f"\n🎭 Testing {len(fortune_teller_gestures)} fortune teller gestures:")

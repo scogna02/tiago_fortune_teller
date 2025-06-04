@@ -46,12 +46,12 @@ class TiagoController:
         self.tts_client = actionlib.SimpleActionClient('/tts_to_soundplay', TtsAction)
         rospy.loginfo("Waiting for /tts_to_soundplay action server...")
         
-        if self.tts_client.wait_for_server(rospy.Duration(timeout)):
+        """if self.tts_client.wait_for_server(rospy.Duration(timeout)):
             self.tts_available = True
             rospy.loginfo("✅ TTS action server connected")
         else:
             rospy.logwarn("⚠️ TTS action server not available, using fallback")
-            self.tts_available = False
+            self.tts_available = False"""
         
         # Gesture client
         self.gesture_client = actionlib.SimpleActionClient('/play_motion', PlayMotionAction)
@@ -63,6 +63,9 @@ class TiagoController:
         else:
             rospy.logwarn("⚠️ PlayMotion action server not available, gestures will be simulated")
             self.gesture_available = False
+
+        self.tts_available = False
+        #self.gesture_available = False
 
     def input_callback(self, msg):
         """Callback for receiving user input from terminal."""
@@ -116,24 +119,34 @@ class TiagoController:
         # Map custom gesture names to actual Tiago motion names
         # Based on official TIAGo motions available in Gazebo simulation
         motion_mapping = {
-            'wave': 'wave',
-            'mystical_pose': 'home',  
-            'thoughtful_pose': 'home',  # No specific look_down motion available
-            'crystal_ball_gaze': 'inspect_surroundings',  # Good for mystical gazing
-            'meditation': 'home',
-            'mystical_wave': 'wave',
-            'revelation': 'offer',  # Offering gesture for revelation
-            'bow': 'home',  # No bow motion available, use home
-            'recognition': 'point',
-            'curious': 'head_tour',  # Head movement for curiosity
-            'counting': 'point',
-            'look_at_user': 'head_tour',  # Use head_tour for looking
-            'nod': 'home',  # No nod available, use home
-            # Additional gestures that could be useful
-            'open_arms': 'offer',
-            'shake_hands': 'shake_hands',
-            'thumb_up': 'thumb_up_hand',
-            'unfold_arm': 'unfold_arm'
+            # Basic fortune teller gestures
+            'wave': 'wave',                          # Welcome greeting
+            'mystical_pose': 'offer',                # Open arms in mystical offering pose
+            'thoughtful_pose': 'prepare_grasp',      # Contemplative hand position
+            'crystal_ball_gaze': 'inspect_surroundings',  # Looking around mystically
+            'meditation': 'home',                    # Neutral meditative position
+            'mystical_wave': 'wave',                 # Same as wave but contextual
+            'revelation': 'open',                    # Open hands for revelation
+            'bow': 'home',                           # Return to neutral position
+            'recognition': 'point',                  # Point to acknowledge user
+            'curious': 'head_tour',                  # Head movement for curiosity
+            'counting': 'pinch_hand',                # Pinch fingers for counting
+            'look_at_user': 'head_tour',             # Look around to find user
+            'nod': 'home',                           # Return to neutral (no nod available)
+            
+            # Extended gesture vocabulary for richer interaction
+            'welcome': 'wave',                       # Welcome gesture
+            'offering': 'offer',                     # Offering hands gesture
+            'open_arms': 'open',                     # Open arms wide
+            'embrace_cosmos': 'unfold_arm',          # Unfold arms to embrace
+            'shake_hands': 'shake_hands',            # Handshake motion
+            'thumbs_up': 'thumb_up_hand',            # Positive gesture
+            'reach_high': 'reach_max',               # Reach for the stars
+            'reach_low': 'reach_floor',              # Grounding gesture
+            'close_meditation': 'close',             # Close hands in meditation
+            'prepare_magic': 'prepare_grasp',        # Prepare for magical gesture
+            'pick_energy': 'pick_from_floor',        # Pick up cosmic energy
+            'pregrasp_wisdom': 'pregrasp_weight',    # Grasp wisdom from the air
         }
         
         motion_name = motion_mapping.get(gesture_type, 'home')
@@ -147,7 +160,7 @@ class TiagoController:
                 goal.priority = 0
                 
                 self.gesture_client.send_goal(goal)
-                result = self.gesture_client.wait_for_result(rospy.Duration(15))
+                result = self.gesture_client.wait_for_result(rospy.Duration(20))
                 
                 if result:
                     rospy.loginfo(f"✅ Gesture '{motion_name}' completed successfully")
