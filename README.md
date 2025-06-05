@@ -1,4 +1,4 @@
-# 🔮 Tiago Fortune Teller - AI-Powered Interactive Oracle
+# 🔮 Tiago Fortune Teller - AI-Powered Social Robot
 
 An advanced, AI-enhanced fortune telling system powered by the PAL Robotics Tiago robot, featuring real-time face recognition, PyKEEN knowledge graph embeddings, personalized AI-generated fortunes, and sophisticated human-robot interaction capabilities.
 
