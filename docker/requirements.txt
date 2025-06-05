@@ -1,7 +1,7 @@
-
 pykeen
 openai
 numpy
-opencv-python
+opencv-contrib-python
+torch
 PyYAML
 more_itertools>=8.0.0
